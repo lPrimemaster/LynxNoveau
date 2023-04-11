@@ -7,8 +7,8 @@ __pycache__/
 lynx.py
 Utilities.py
 
-# Ignore config files
-*.cfg
+# Ignore json config files
+*.json
 
 # Ignore the virtual env
 .env/

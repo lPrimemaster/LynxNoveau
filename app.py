@@ -20,13 +20,16 @@ from Lynx.DlfcData import *
 from Lynx.PhaData import *
 
 class Config:
-    def __init__(self) -> None:        
+
+    FILENAME = 'lynxnoveau_cfg.json'
+
+    def __init__(self) -> None:
         # Read the config file / not using QT for this ... (simpler)
         self.config = self._read_cfg()
 
     def _read_cfg(self):
         try:
-            with open('lynxnoveau.cfg', 'r') as cfg:
+            with open(Config.FILENAME, 'r') as cfg:
                 return json.load(cfg)
         except FileNotFoundError:
             print('Config file not found...')
@@ -36,7 +39,7 @@ class Config:
     
     def _create_cfg(self, **kwargs):
         try:
-            with open('lynxnoveau.cfg', 'w') as cfg:
+            with open(Config.FILENAME, 'w') as cfg:
                 return json.dump(kwargs, cfg)
         except Exception as e:
             print(f'Could not create config file. Exception: {e}')
