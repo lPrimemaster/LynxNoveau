@@ -1,0 +1,11 @@
+__pycache__/
+
+# Ignore the backup files from the 2to3 conversion
+*.bak
+
+# Ignore old files (I have them locally to port)
+lynx.py
+Utilities.py
+
+# Ignore config files
+*.cfg
