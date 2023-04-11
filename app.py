@@ -3,9 +3,8 @@ import json
 from datetime import datetime
 
 from PyQt5.QtCore import QTimer, QObject, QThread, pyqtSignal
-from PyQt5 import QtGui, QtCore
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QStyle, QStyleOption, QDialog
-from PyQt5 import uic, QtWidgets
+from PyQt5.QtWidgets import QApplication, QMainWindow, QDialog
+from PyQt5 import uic
 
 import numpy as np
 import pyqtgraph as pg

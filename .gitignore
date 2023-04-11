@@ -9,3 +9,6 @@ Utilities.py
 
 # Ignore config files
 *.cfg
+
+# Ignore the virtual env
+.env/
