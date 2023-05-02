@@ -135,7 +135,7 @@ class DataHistogram(pg.PlotWidget):
 
 # This is like a friend class for the main window ... (just quick and dirty)
 class AsyncConnect(QObject):
-    exception  = pyqtSignal()
+    exception = pyqtSignal()
 
     def run(self, lynx_window):
         try:
