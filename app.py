@@ -1,15 +1,15 @@
 import sys
 import json
 from datetime import datetime
+import traceback
 
-from PyQt5.QtCore import QTimer, QObject, QThread, pyqtSignal
-from PyQt5.QtWidgets import QApplication, QMainWindow, QDialog
+from PyQt5.QtCore import QTimer, QObject, Qt, pyqtSignal
+from PyQt5.QtWidgets import QApplication, QMainWindow, QDialog, QSplashScreen, QMessageBox
+from PyQt5.QtGui import QPixmap, QIcon, QGuiApplication
 from PyQt5 import uic
 
 import numpy as np
 import pyqtgraph as pg
-
-from functools import partial
 
 # import the Lynx device proxy and other resources
 from Lynx.DeviceFactory import *
@@ -20,9 +20,7 @@ from Lynx.DlfcData import *
 from Lynx.PhaData import *
 
 class Config:
-
     FILENAME = 'lynxnoveau_cfg.json'
-
     def __init__(self) -> None:
         # Read the config file / not using QT for this ... (simpler)
         self.config = self._read_cfg()
@@ -68,6 +66,8 @@ class ConfigWindow(QDialog):
     def __init__(self, parent) -> None:
         super(ConfigWindow, self).__init__(parent)
         self.ui = uic.loadUi('ui/ConfigWindow.ui', self)
+
+        self.setWindowIcon(QIcon('res/icon.png'))
 
         self.config = Config()
         self._change_fields()
@@ -135,9 +135,6 @@ class DataHistogram(pg.PlotWidget):
 
 # This is like a friend class for the main window ... (just quick and dirty)
 class AsyncConnect(QObject):
-    progress   = pyqtSignal(str)
-    finished   = pyqtSignal()
-    finishedOk = pyqtSignal()
     exception  = pyqtSignal()
 
     def run(self, lynx_window):
@@ -146,19 +143,14 @@ class AsyncConnect(QObject):
             lynx_window.acq_set_running()
 
             if not lynx_window._lynx:
-                self.progress.emit('Creating device ...')
                 lynx_window._lynx = DeviceFactory.createInstance(DeviceFactory.DeviceInterface.IDevice)
             config_options = lynx_window.configWindow.get_config().get_dict()
 
             ip_addr = config_options['connection_ip']
-            self.progress.emit(f'Connecting to {ip_addr} ...')
             lynx_window._lynx.open('', ip_addr)
-            self.progress.emit(f'Connected to {lynx_window._lynx.getParameter(ParameterCodes.Network_MachineName, 0)}.')
 
-            self.progress.emit('Acquiring lock ...')
             lynx_window._lynx.lock(config_options['username'], config_options['password'], config_options['input_mode'])
             
-            self.progress.emit('Trying to abort previous jobs ...')
             try:
                 lynx_window._lynx.control(CommandCodes.Stop, config_options['input_mode'])
             except:
@@ -179,38 +171,41 @@ class AsyncConnect(QObject):
             except:
                 pass
             
-            self.progress.emit('Setting input mode ...')
             lynx_window._lynx.setParameter(ParameterCodes.Input_Mode, 0, config_options['input_mode'])
 
-            self.progress.emit('Setting preset mode ...')
             if (PresetModes.PresetLiveTime == config_options['preset_mode']):
                 lynx_window._lynx.setParameter(ParameterCodes.Preset_Live, float(config_options['acq_time']), config_options['input_mode'])
             elif(PresetModes.PresetRealTime == config_options['preset_mode']):
                 lynx_window._lynx.setParameter(ParameterCodes.Preset_Real, float(config_options['acq_time']), config_options['input_mode'])
             
-            self.progress.emit('Clearing data and time ...')
             lynx_window._lynx.control(CommandCodes.Clear, config_options['input_mode'])
 
             # TODO: Add HV control stuff
 
-            self.progress.emit('Acquisition ongoing ...')
             lynx_window._lynx.control(CommandCodes.Start, config_options['input_mode'])
 
-            self.finishedOk.emit()
-            self.finished.emit()
+            lynx_window._acq_timer.start(100)
 
         except Exception as e:
             print(f'Exception caught. Details: {e}.')
-            self.progress.emit(f'Exception caught. Details: {e}.')
+            print(traceback.format_exc())
+
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("Exception caught. Details:")
+            msg.setInformativeText(f'{e}\n\nTraceback:\n{traceback.format_exc()}')
+            msg.setWindowTitle("Error")
+            msg.exec_()
 
             self.exception.emit() # Just reset the buttons on the menu
-            self.finished.emit()
 
 
 class LynxNoveauMainWindow(QMainWindow):
     def __init__(self) -> None:
         super(LynxNoveauMainWindow, self).__init__()
         self.ui = uic.loadUi('ui/LynxNoveauMainWindow.ui', self)
+
+        self.setWindowIcon(QIcon('res/icon.png'))
 
         # Setup other windows
         self.configWindow = ConfigWindow(self)
@@ -257,17 +252,16 @@ class LynxNoveauMainWindow(QMainWindow):
 
     def _start_acq(self):
         if not self._acq_running:
-            self._connect_thread = QThread()
+            # Try a synchronous task to see if the error persists
             async_worker = AsyncConnect()
-            async_worker.moveToThread(self._connect_thread)
-            self._connect_thread.started.connect(partial(async_worker.run, self))
-            async_worker.finishedOk.connect(partial(self._acq_timer.start, 100))
-            async_worker.finished.connect(self._connect_thread.quit)
-            async_worker.finished.connect(async_worker.deleteLater)
-            self._connect_thread.finished.connect(self._connect_thread.deleteLater)
-            async_worker.exception.connect(self.acq_set_ready)
-            async_worker.progress.connect(self._display_msg)
-            self._connect_thread.start()
+            async_worker.exception.connect(self._stop_acq)
+
+            curr_screen = QGuiApplication.screenAt(self.pos())
+            splash_screen = QSplashScreen(curr_screen, QPixmap('res/splash.png'))
+            splash_screen.show()
+            splash_screen.showMessage('Attempting connection with hardware\nPlease wait...', Qt.AlignHCenter | Qt.AlignBottom)
+            async_worker.run(self)
+            splash_screen.close()
             
     def _stop_acq(self):
         if self._acq_running:
